@@ -1,0 +1,144 @@
+@using System.Drawing
+@inject GameState State
+
+<HeadContent>
+    <style>
+        :root {
+            --board-bg: @ColorTranslator.ToHtml(BoardColor);
+            --player1: @ColorTranslator.ToHtml(Player1Color);
+            --player2: @ColorTranslator.ToHtml(Player2Color);
+        }
+    </style>
+</HeadContent>
+
+<div>
+    <nav>
+        @for (byte i = 0; i < 7; i++)
+        {
+            var col = i;
+            <span title="Click to play a piece" @onclick="() => PlayPiece(col)">🔽</span>
+        }
+    </nav>
+    
+    <article>
+        @winnerMessage
+        <button style="@ResetStyle" @onclick="ResetGame">Reset the game</button>
+        <br />
+        <span class="alert-danger">@errorMessage</span>
+        <span class="alert-info">@CurrentTurn</span>
+        <div class="stats-container">
+            <div class="stat-item">
+                <strong>Moves:</strong> <span class="stat-value">@totalMoves</span>
+            </div>
+            <div class="stat-item">
+                <strong>Games Played:</strong> <span class="stat-value">@gamesPlayed</span>
+            </div>
+            <div class="stat-item">
+                <strong>Player 1 Wins:</strong> <span class="stat-value">@player1Wins</span>
+            </div>
+            <div class="stat-item">
+                <strong>Player 2 Wins:</strong> <span class="stat-value">@player2Wins</span>
+            </div>
+            <div class="stat-item">
+                <strong>Ties:</strong> <span class="stat-value">@ties</span>
+            </div>
+        </div>
+    </article>
+    
+    <div class="board">
+        @for (var i = 0; i < 42; i++)
+        {
+            <span class="container">
+                <span></span>
+            </span>
+        }
+        @for (var i = 0; i < 42; i++)
+        {
+            @if (!string.IsNullOrEmpty(pieces[i]))
+            {
+                <span class="@pieces[i]"></span>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public Color BoardColor { get; set; } = ColorTranslator.FromHtml("yellow");
+    [Parameter] public Color Player1Color { get; set; } = ColorTranslator.FromHtml("red");
+    [Parameter] public Color Player2Color { get; set; } = ColorTranslator.FromHtml("blue");
+    
+    private string[] pieces = new string[42];
+    private string winnerMessage = string.Empty;
+    private string errorMessage = string.Empty;
+    
+    // Custom feature: Statistics tracking
+    private int totalMoves = 0;
+    private int gamesPlayed = 0;
+    private int player1Wins = 0;
+    private int player2Wins = 0;
+    private int ties = 0;
+    
+    private string CurrentTurn => (winnerMessage == string.Empty) ? 
+        $"Player {State.PlayerTurn}'s Turn" : "";
+    private string ResetStyle => (winnerMessage == string.Empty) ? "display: none;" : "";
+    
+    protected override void OnInitialized()
+    {
+        State.ResetBoard();
+    }
+    
+    private void PlayPiece(byte col)
+    {
+        errorMessage = string.Empty;
+        try
+        {
+            var player = State.PlayerTurn;
+            var landingRow = State.PlayPiece(col);
+            
+            // Calculate the board index where the piece landed
+            // Board is 7 columns, so: row 1 = indices 0-6, row 2 = 7-13, etc.
+            // landingRow is 1-based, so we need (landingRow - 1) * 7 + col
+            var boardIndex = (landingRow - 1) * 7 + col;
+            pieces[boardIndex] = $"player{player} col{col} drop{landingRow}";
+            
+            // Custom feature: Increment move counter
+            totalMoves++;
+            
+            // Check for win state once and store it
+            var winState = State.CheckForWin();
+            winnerMessage = winState switch
+            {
+                GameState.WinState.Player1_Wins => "Player 1 Wins!",
+                GameState.WinState.Player2_Wins => "Player 2 Wins!",
+                GameState.WinState.Tie => "It's a tie!",
+                _ => ""
+            };
+            
+            // Custom feature: Update statistics when game ends
+            if (winState != GameState.WinState.No_Winner)
+            {
+                gamesPlayed++;
+                if (winState == GameState.WinState.Player1_Wins)
+                    player1Wins++;
+                else if (winState == GameState.WinState.Player2_Wins)
+                    player2Wins++;
+                else if (winState == GameState.WinState.Tie)
+                    ties++;
+            }
+        }
+        catch (ArgumentException ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+    
+    private void ResetGame()
+    {
+        State.ResetBoard();
+        winnerMessage = string.Empty;
+        errorMessage = string.Empty;
+        pieces = new string[42];
+        // Note: Statistics persist across resets (within session)
+    }
+}
+
